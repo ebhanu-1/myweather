@@ -5,6 +5,16 @@ Single-file web app for Bhanu and family: a weather page you scrub through inste
 7 days. HTML first (same journey as Media Studio and ClearSky), native iOS later when needed.
 Design notes and what makes it different: docs/design.md.
 
+## Status (2026-11-05)
+- v1.0 released and live: https://ebhanu-1.github.io/myweather/ (main @ 81a6f6b at release; this file updated after).
+- Built and verified in a browser at phone width: sky scene, scrub (sky drag + ribbon), feels-like story, dress, ask-the-sky with
+  best windows, rain countdown, week list, sun/moon/sunset card, family orbs, place sheet (zip, city, "lat, lon", location), NWS alerts.
+- NOT yet verified: a real phone (touch drag, Add to Home Screen, offline launch via sw.js), the flick inertia cap (added after the
+  last browser check), a wide desktop window (only a narrow pane was available), the geolocation button, an active NWS alert.
+- Decision: places are per person (browser storage). Family sharing (share link or synced list) was considered and not wanted. Do not build unless asked.
+- Next iteration: use it for a few days, then fix what feels off (scoring thresholds, vibe sentences, layout on small phones, sky look).
+  Start by reading docs/design.md and the "Ideas not built yet" list below.
+
 ## Commands
 - npm test                 # node --test, no network
 - npm run build            # bumps VERSION (1.0 -> 1.1), inlines src/ into ./index.html (and ./dist), syntax-checks, enforces the size budget
