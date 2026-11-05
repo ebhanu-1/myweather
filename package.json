@@ -1,0 +1,11 @@
+{
+  "name": "myweather",
+  "private": true,
+  "description": "A weather app you scrub through instead of read: drag through the next 7 days and the sky, the feel and the plan change with you. Builds to one HTML file.",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test test/",
+    "live": "node tools/live-check.mjs",
+    "serve": "node tools/serve.mjs"
+  }
+}

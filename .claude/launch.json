@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "myweather", "runtimeExecutable": "node", "runtimeArgs": ["tools/serve.mjs", "5174"], "port": 5174 }
+  ]
+}

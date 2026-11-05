@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MyWeather</title>
+<meta name="description" content="A weather app you scrub through: drag the sky to see how the next seven days will look and feel, and when is best for a walk, the playground or the laundry line.">
+<meta name="theme-color" content="#2a78d6">
+<meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="MyWeather">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>
+/*__CSS__*/
+</style>
+</head>
+<body>
+<canvas id="sky" aria-hidden="true"></canvas>
+<div id="scrim" aria-hidden="true"></div>
+<div class="app">
+  <header class="bar">
+    <button type="button" id="placeBtn" class="placebtn" aria-label="Choose a place"><span id="placeIcon"></span><span id="placeName">MyWeather</span><span id="placeChev"></span></button>
+    <div class="right">
+      <button type="button" id="alertPill" class="alertpill" hidden></button>
+      <span class="ver" id="ver" title="version · build time">__VERSION__</span>
+    </div>
+  </header>
+  <div id="updatebar" aria-live="polite"></div>
+  <div id="banner" aria-live="polite"></div>
+  <button type="button" id="firstrun" class="firstrun" hidden>Showing Andover for now. Tap here to use your location or add places.</button>
+
+  <section id="hero" class="hero">
+    <div id="loading" class="loading" role="status">Reading the sky…</div>
+    <div class="top">
+      <div class="whenrow"><span id="when" class="when">&nbsp;</span><span id="date" class="date"></span></div>
+      <div class="feel" aria-live="polite"><span id="feelNum">–</span><sup>°</sup></div>
+      <div class="flabel">feels like <span class="dot">·</span> <span id="air"></span></div>
+      <h1 id="headline" class="headline"></h1>
+      <p id="vibe" class="vibe"></p>
+      <div id="drivers" class="drivers"></div>
+    </div>
+    <div class="bottom">
+      <p class="next"><span id="next"></span><span id="yday" class="yday"></span></p>
+      <div id="dress" class="chips dress" aria-label="What to wear and bring"></div>
+      <div class="askhead">Ask the sky: when is it good for…</div>
+      <div id="ask" class="chips ask"></div>
+      <div id="askResult" class="askresult" hidden></div>
+      <div id="ribbonWrap" class="ribbonwrap">
+        <canvas id="ribbon" class="ribbon" tabindex="0" role="slider" aria-label="Time. Use the arrow keys to move an hour at a time" aria-valuemin="0" aria-valuemax="168" aria-valuenow="0"></canvas>
+      </div>
+      <div class="controls">
+        <button type="button" id="playBtn" class="ctl"></button>
+        <button type="button" id="nowBtn" class="ctl"></button>
+        <span id="hint" class="hint" hidden>Drag the sky or the timeline to travel through the week</span>
+      </div>
+    </div>
+  </section>
+
+  <main class="cards">
+    <div id="alertCard" class="card alerts" hidden></div>
+    <section id="details" class="card"></section>
+    <section id="sun" class="card"></section>
+    <section id="week" class="card"></section>
+    <section id="family" class="card"></section>
+    <footer>
+      <p>Forecast, air quality and place search by <a href="https://open-meteo.com/" rel="noopener">Open-Meteo</a>; alerts from the <a href="https://www.weather.gov/" rel="noopener">National Weather Service</a> (US only); zip lookup by <a href="https://zippopotam.us/" rel="noopener">Zippopotam.us</a> and <a href="https://nominatim.org/" rel="noopener">OpenStreetMap Nominatim</a>. Free tiers are for personal, non-commercial use.</p>
+      <p>"Feels like" is the model's apparent temperature (wind, humidity and sun included). Activity scores and sunset color are rules of thumb, a guide and not a promise. For warnings, trust the official alerts. Only coordinates leave your device; places are saved in this browser.</p>
+    </footer>
+  </main>
+</div>
+
+<div id="sheet" class="sheet" hidden role="dialog" aria-modal="true" aria-label="Places">
+  <div class="panel">
+    <div class="phead"><h2>Where?</h2><button type="button" id="sheetClose" class="x" aria-label="Close">Done</button></div>
+    <form id="form" class="search" autocomplete="off" role="search">
+      <label class="sr" for="q">Zip code, city, or latitude and longitude</label>
+      <input id="q" name="q" type="text" inputmode="text" enterkeyhint="search" placeholder="Zip code or city" autocapitalize="words" autocorrect="off" spellcheck="false" maxlength="60">
+      <button type="submit" id="goBtn" class="go"></button>
+    </form>
+    <button type="button" id="locate" class="locate"></button>
+    <div id="sheetList" class="sheetlist"></div>
+  </div>
+</div>
+<noscript><p class="card">MyWeather needs JavaScript to draw the sky.</p></noscript>
+<script>
+/*__JS__*/
+</script>
+</body>
+</html>
