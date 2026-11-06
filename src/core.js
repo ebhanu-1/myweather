@@ -602,6 +602,12 @@
     return out.trim();
   }
 
+  // How old a reading is, in words: "just now", "4 min ago", "2 h ago".
+  function ageLabel(atMs, nowMs) {
+    const m = Math.max(0, Math.round((nowMs - atMs) / 60000));
+    return m < 1 ? 'just now' : m < 90 ? m + ' min ago' : Math.round(m / 60) + ' h ago';
+  }
+
   function mergeAir(hours, air) {
     const m = new Map((air || []).map((a) => [a.ms, a]));
     return hours.map((h) => { const a = m.get(h.ms); return a ? Object.assign({}, h, { aqi: a.aqi, pm25: a.pm25 }) : h; });
@@ -628,6 +634,6 @@
     sampleAt, indexAt, contextAt, circMix,
     feelsWord, comfortWord, windChillDelta, heatIndexDelta, feelsDrivers, feelsStory, vibe, dress,
     ACTIVITIES, rate, scoreSeries, bestWindows,
-    outlook, vsYesterday, nowcast, sunsetQuality, groupDays, todayHours, mergeAir, pressureTrend, dirName, aqiWord, uvWord,
+    outlook, vsYesterday, nowcast, sunsetQuality, groupDays, todayHours, ageLabel, mergeAir, pressureTrend, dirName, aqiWord, uvWord,
   };
 });

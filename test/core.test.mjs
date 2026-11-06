@@ -281,3 +281,12 @@ test('today summary skips the high/low sentence when the rest of the day is flat
   const late = C.todayHours(ANDOVER, series(48, (i) => ({ feelsF: 40 + i })), T0 + 21 * 3600000);
   assert.equal(late.summary, 'Dry for the rest of today.');
 });
+
+test('age label: just now, minutes, then hours', () => {
+  const n = Date.parse('2026-11-05T17:00:00Z');
+  assert.equal(C.ageLabel(n - 20000, n), 'just now');
+  assert.equal(C.ageLabel(n - 4 * 60000, n), '4 min ago');
+  assert.equal(C.ageLabel(n - 80 * 60000, n), '80 min ago');
+  assert.equal(C.ageLabel(n - 150 * 60000, n), '3 h ago');
+  assert.equal(C.ageLabel(n + 5000, n), 'just now');
+});

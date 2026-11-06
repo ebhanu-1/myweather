@@ -5,7 +5,11 @@ Single-file web app for Bhanu and family: a weather page you scrub through inste
 7 days. HTML first (same journey as Media Studio and ClearSky), native iOS later when needed.
 Design notes and what makes it different: docs/design.md.
 
-## Status (2026-11-05)
+## Status (2026-11-06)
+- v1.2: two tabs (bottom bar). TODAY (opens first) is locked to now: no sky drag, no ribbon; the hour strip sits in the hero and tapping an hour
+  moves the sky there, drifting back to now after 3 idle minutes (or on "Now", or when the app returns to the foreground); good-window chips show today only.
+  WEEK is where you travel: sky drag, ribbon, play the week, the day list, windows for the whole week. Details and sun cards show on both; family on Today.
+  Forecast cache is now 5 minutes (was 10) and "Updated N min ago" under the hero is tappable to force a refresh. Not yet checked on a real phone.
 - v1.1: added "Today, hour by hour" card above "The week" (24-hour strip: icon, feels-like, rain %, sunrise/sunset, past dimmed; follows the scrubbed
   moment, tap an hour to jump the sky there; one-line summary of the rest of today). Logic is `todayHours` in core.js. Also fixed the card grid so a
   wide child can't stretch the page. Checked in a browser at 375 px (evening and midday); not yet on a real phone.
@@ -51,7 +55,8 @@ Design notes and what makes it different: docs/design.md.
 - Tests never call live APIs. `npm run live` is the only networked check.
 - No emoji glyphs anywhere (iOS renders them inconsistently): icons are drawn SVG.
 - One HTML file, no runtime CDN, under 200 KB gzipped. Dark glass cards over the sky; text is white with a scrim for contrast.
-- Pointer drag on the hero scrubs time (a screen width is 18 hours); the ribbon is a slider (arrow keys move an hour).
+- Pointer drag on the hero scrubs time (a screen width is 18 hours) on the Week tab only; the ribbon is a slider (arrow keys move an hour).
+- Anything that takes over the clock (tab switch, Now, play) must stop a flick's glide and a smooth goTo (`stopMotion`).
 - The browser pane pauses requestAnimationFrame when hidden: show it (ccd_view show_pane) before testing sky animation.
 
 ## Definition of done

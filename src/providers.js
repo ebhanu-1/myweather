@@ -221,10 +221,10 @@
   const ckey = (p) => p.lat.toFixed(3) + ',' + p.lon.toFixed(3);
 
   // One call: yesterday plus eight days of hours, the next 6 hours at 15 minutes, and the current reading.
-  async function fetchWeather(place) {
+  async function fetchWeather(place, opts) {
     const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + place.lat + '&longitude=' + place.lon + '&hourly=' + HOURLY.join(',') +
       '&minutely_15=precipitation&current=temperature_2m,apparent_temperature,weather_code,is_day,precipitation&past_days=1&forecast_days=8&past_minutely_15=4&forecast_minutely_15=24' + UNITS;
-    const res = await cachedJson('wx:' + ckey(place), 10 * 60000, url);
+    const res = await cachedJson('wx:' + ckey(place), opts && opts.force ? 0 : 5 * 60000, url);
     return Object.assign(normalizeWeather(res.json), { at: res.at, fromCache: res.fromCache, stale: !!res.stale, error: res.error || null });
   }
 

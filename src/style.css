@@ -2,7 +2,7 @@
   --ink: #fff; --ink2: rgba(255,255,255,.78); --ink3: rgba(255,255,255,.58);
   --glass: rgba(12,20,36,.46); --glass2: rgba(255,255,255,.12); --line: rgba(255,255,255,.16);
   --accent: #8df0aa; --warn: #ffd36a; --rain: #8ec5ff;
-  --r: 22px; --gut: 16px;
+  --r: 22px; --gut: 16px; --tabh: 62px;
   --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px);
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -26,7 +26,7 @@ a { color: var(--ink); }
   background: linear-gradient(180deg, rgba(0,0,0,.34) 0%, rgba(0,0,0,.12) 34%, rgba(0,0,0,0) 48%, rgba(0,0,0,.22) 66%, rgba(0,0,0,.46) 100%); }
 body.feel-cold #scrim { background: linear-gradient(180deg, rgba(8,18,40,.36) 0%, rgba(8,18,40,.12) 34%, rgba(0,0,0,0) 48%, rgba(8,18,40,.24) 66%, rgba(8,18,40,.5) 100%); }
 
-.app { position: relative; z-index: 2; max-width: 640px; margin: 0 auto; padding: 0 var(--gut) calc(40px + var(--sab)); }
+.app { position: relative; z-index: 2; max-width: 640px; margin: 0 auto; padding: 0 var(--gut) calc(var(--tabh) + 34px + var(--sab)); }
 
 /* top bar */
 .bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: calc(12px + var(--sat)) 0 6px; }
@@ -44,7 +44,7 @@ body.feel-cold #scrim { background: linear-gradient(180deg, rgba(8,18,40,.36) 0%
 .upd { background: #fff; color: #0b2a55; text-decoration: none; padding: 3px 10px; border-radius: 999px; margin-left: 4px; text-shadow: none; }
 
 /* hero: the sky is the page */
-.hero { display: flex; flex-direction: column; justify-content: space-between; min-height: calc(100svh - 60px - var(--sat)); padding-bottom: 6px; touch-action: pan-y; user-select: none; -webkit-user-select: none; cursor: grab; position: relative; }
+.hero { display: flex; flex-direction: column; justify-content: space-between; min-height: calc(100svh - 60px - var(--sat) - var(--tabh) - var(--sab)); padding-bottom: 6px; touch-action: pan-y; user-select: none; -webkit-user-select: none; cursor: grab; position: relative; }
 body.scrubbing .hero { cursor: grabbing; }
 .hero.is-loading .top, .hero.is-loading .bottom { opacity: .35; }
 .loading { position: absolute; inset: 0; display: grid; place-items: center; font-size: 1.1rem; letter-spacing: .02em; color: var(--ink2); pointer-events: none; }
@@ -119,9 +119,22 @@ body.scrubbing .hero { cursor: grabbing; }
 .sunsetbar i { display: block; height: 100%; background: linear-gradient(90deg, #ffb066, #ff6f91, #b983ff); border-radius: 99px; }
 .moonrow { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
 .ext { font-size: .85rem; color: var(--ink2); }
-/* today, hour by hour */
-.tsum { color: var(--ink2); font-size: .92rem; margin: -2px 0 10px; }
-.hours { position: relative; display: flex; gap: 2px; overflow-x: auto; margin: 0 -8px; padding: 2px 8px 4px; scrollbar-width: none; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
+/* tabs: Today is locked to now; Week is where you travel through time */
+.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; padding-bottom: var(--sab); background: rgba(10,16,30,.62); border-top: 1px solid var(--line); backdrop-filter: blur(20px) saturate(1.3); -webkit-backdrop-filter: blur(20px) saturate(1.3); }
+.tabrow { display: flex; max-width: 640px; margin: 0 auto; }
+.tab { flex: 1; height: var(--tabh); display: grid; justify-items: center; align-content: center; gap: 3px; font-size: .78rem; font-weight: 700; letter-spacing: .02em; color: var(--ink3); text-shadow: none; }
+.tab.on { color: #fff; }
+.tab.on svg { color: #ffd678; }
+body[data-tab="today"] #week, body[data-tab="today"] #ribbonWrap, body[data-tab="today"] #playBtn, body[data-tab="today"] #hint { display: none; }
+body[data-tab="week"] #family, body[data-tab="week"] #todayWrap, body[data-tab="week"] #freshBtn { display: none; }
+body[data-tab="week"] #week { order: -1; }
+body[data-tab="today"] .hero { cursor: auto; }
+.fresh { margin-left: auto; font-size: .78rem; color: var(--ink2); text-decoration: underline; text-decoration-color: rgba(255,255,255,.35); text-underline-offset: 3px; padding: 6px 2px; }
+
+/* today, hour by hour (inside the hero) */
+.todaywrap { padding: 10px 8px 6px; margin-top: 4px; cursor: auto; }
+.tsum { color: var(--ink2); font-size: .88rem; margin: 0 6px 6px; }
+.hours { position: relative; display: flex; gap: 2px; overflow-x: auto; margin: 0; padding: 2px 0 4px; scrollbar-width: none; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
 .hours::-webkit-scrollbar { display: none; }
 .hcol { flex: none; width: 56px; display: grid; justify-items: center; align-content: start; gap: 3px; padding: 8px 0 7px; border-radius: 14px; border: 1.5px solid transparent; text-align: center; }
 .hcol.past { opacity: .5; }

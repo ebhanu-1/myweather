@@ -53,6 +53,8 @@
       alert: [path('M12 3.5l9.5 16.5h-19z'), path('M12 10v4.5M12 17.2v.1')],
       search: [svg('circle', { cx: 11, cy: 11, r: 6.5 }), path('M20 20l-4.2-4.2')],
       arrow: [path('M12 20V5M6 11l6-6 6 6')],
+      sunny: [svg('circle', { cx: 12, cy: 12, r: 4 }), path('M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8')],
+      week: [svg('rect', { x: 3.5, y: 5, width: 17, height: 15, rx: 3 }), path('M3.5 10h17M8 3v4M16 3v4')],
     }[name] || [];
     return svg('svg', a, ...body);
   }
@@ -88,7 +90,7 @@
   const S = {
     place: null, places: store.get('places', []), wx: null, hours: null, minutely: [], current: null, aqAt: null,
     alerts: [], family: [], nowMs: Date.now(), T: Date.now(), follow: true, actId: store.get('act', null), scores: null, windows: [],
-    loading: false, error: null, stale: null, domain: null, elevs: null, playing: false, loadId: 0, dayInfo: null, todayScroll: 0, todayBuiltAt: 0, hinted: store.get('hinted', false),
+    loading: false, error: null, stale: null, domain: null, elevs: null, playing: false, loadId: 0, dayInfo: null, todayScroll: 0, todayBuiltAt: 0, tab: 'today', allWindows: [], hinted: store.get('hinted', false),
   };
   const fmtDeg = (v) => (isNum(v) ? Math.round(v) + '°' : '–');
 
@@ -126,13 +128,13 @@
 
   /* ---------- loading ---------- */
 
-  async function load(place) {
+  async function load(place, opts) {
     const id = ++S.loadId;
     S.loading = true; S.error = null;
     if (!S.hours || (S.place && S.place.id !== place.id)) { $('#loading').hidden = false; $('#hero').classList.add('is-loading'); }
     renderTop(place);
     try {
-      const [wx, aq] = await Promise.all([P.fetchWeather(place), P.fetchAir(place).catch(() => null)]);
+      const [wx, aq] = await Promise.all([P.fetchWeather(place, opts), P.fetchAir(place).catch(() => null)]);
       if (id !== S.loadId) return;
       S.place = place;
       S.wx = wx;
@@ -146,6 +148,7 @@
       S.loading = false;
       $('#loading').hidden = true; $('#hero').classList.remove('is-loading');
       afterData();
+      renderFresh();
       refreshExtras(place, id);
     } catch (e) {
       if (id !== S.loadId) return;
@@ -318,7 +321,7 @@
     if (!S.actId) { S.scores = null; S.windows = []; return; }
     if (S.scores && S.scores.id === S.actId) return;
     S.scores = { id: S.actId, v: C.scoreSeries(S.place, S.hours, S.actId) };
-    S.windows = C.bestWindows(S.place, S.hours, S.actId, S.nowMs, 4);
+    S.windows = C.bestWindows(S.place, S.hours, S.actId, S.nowMs, 10);
   }
   function renderAskResult(r, c) {
     const box = $('#askResult');
@@ -331,10 +334,12 @@
     clear(box);
     box.appendChild(h('div', { class: 'askNow' }, h('span', { class: 'score s-' + rt.label.toLowerCase() }, rt.score), h('span', null, h('strong', null, act.label + ': ' + rt.label), ' · ' + (rt.why || ''))));
     const wins = h('div', { class: 'wins' });
-    if (!S.windows.length) wins.appendChild(h('span', { class: 'muted small' }, 'No good window in the next week.'));
-    for (const w of S.windows) {
+    const todayKey = C.localParts(S.nowMs, tz).date;
+    const list = S.tab === 'today' ? S.windows.filter((w) => w.day === todayKey) : S.windows.slice(0, 4);
+    if (!list.length) wins.appendChild(h('span', { class: 'muted small' }, S.tab === 'today' ? 'No good window left today. The Week tab shows the next days.' : 'No good window in the next week.'));
+    for (const w of list) {
       const lbl = C.dayLabel(w.startMs, S.nowMs, tz) + ' ' + C.hourLabel(w.startMs, tz).replace(' ', '').toLowerCase() + '–' + C.hourLabel(w.endMs, tz).replace(' ', '').toLowerCase();
-      wins.appendChild(h('button', { type: 'button', class: 'win', onclick: () => goTo(w.peakMs) }, h('b', null, w.peak), ' ' + lbl));
+      wins.appendChild(h('button', { type: 'button', class: 'win', onclick: () => goTo(w.peakMs, true) }, h('b', null, w.peak), ' ' + lbl));
     }
     box.appendChild(wins);
   }
@@ -395,21 +400,20 @@
   // The strip is built once per forecast load; scrubbing only moves the highlight (syncToday), so dragging stays cheap.
   let todayCols = [], todaySel = -1, todayKey = null;
   function renderToday() {
-    const el = $('#today');
+    const el = $('#todayWrap');
     clear(el);
     todayCols = []; todaySel = -1; S.todayBuiltAt = S.nowMs;
     const t = C.todayHours(S.place, S.hours, S.nowMs);
     if (!t.rows.length) { todayKey = null; return; }
     const keep = todayKey === t.key && el.dataset.place === S.place.id ? S.todayScroll : null;
     todayKey = t.key; el.dataset.place = S.place.id;
-    el.appendChild(h('h3', null, 'Today, hour by hour'));
     if (t.summary) el.appendChild(h('p', { class: 'tsum' }, t.summary));
-    const strip = h('div', { class: 'hours', role: 'group', 'aria-label': 'Hours of today. Tap one to see the sky then' });
+    const strip = h('div', { class: 'hours', role: 'group', 'aria-label': 'Hours of today. Tap one to see the sky and the weather then' });
     for (const row0 of t.rows) {
       const row = calibrated(row0, row0.ms);
       const info = C.codeInfo(row0.code);
       const wet = row0.pop >= 20 || row0.precipIn >= 0.01;
-      const col = h('button', { type: 'button', class: 'hcol' + (row0.past ? ' past' : '') + (row0.now ? ' now' : '') + (row0.night ? ' night' : ''), 'data-ms': row0.ms, onclick: () => { goTo(row0.now ? S.nowMs : row0.ms, true); document.getElementById('hero').scrollIntoView({ behavior: 'smooth', block: 'start' }); },
+      const col = h('button', { type: 'button', class: 'hcol' + (row0.past ? ' past' : '') + (row0.now ? ' now' : '') + (row0.night ? ' night' : ''), 'data-ms': row0.ms, onclick: () => (row0.now ? goNow() : goTo(row0.ms, true)),
         'aria-label': (row0.now ? 'Now' : row0.label) + ', feels ' + (isNum(row.feelsF) ? Math.round(row.feelsF) + ' degrees' : 'unknown') + ', ' + info.label.toLowerCase() + (wet ? ', ' + Math.round(row0.pop) + '% chance of rain' : '') },
         h('span', { class: 'ht' }, row0.now ? 'Now' : row0.label.replace(' ', ' ')),
         h('span', { class: 'hi' }, wxIcon(info.kind, 26, row0.night)),
@@ -583,13 +587,24 @@
 
   /* ---------- time control ---------- */
 
+  // Today is locked to now: if you look at another hour there, it drifts back by itself after a few idle minutes.
+  let homeTimer = 0;
+  function armHome() {
+    clearTimeout(homeTimer);
+    if (S.tab === 'today' && !S.follow) homeTimer = setTimeout(() => { if (S.tab === 'today') goNow(); }, 3 * 60000);
+  }
+  let inertia = 0, animTok = 0; // a flick's glide and a smooth goTo: both must stop when something else takes over the clock
+  function stopMotion() { cancelAnimationFrame(inertia); animTok++; }
   function goTo(ms, smooth) {
     S.follow = false;
     stopPlay();
+    stopMotion();
+    armHome();
     const to = clamp(ms, S.domain.d0, S.domain.d1 - HOUR);
     if (!smooth) { S.T = to; requestUpdate(); return; }
-    const from = S.T, t0 = performance.now();
+    const from = S.T, t0 = performance.now(), my = animTok;
     const step = (t) => {
+      if (my !== animTok) return;
       const f = clamp((t - t0) / 420, 0, 1), e = 1 - Math.pow(1 - f, 3);
       S.T = from + (to - from) * e;
       requestUpdate();
@@ -597,7 +612,7 @@
     };
     requestAnimationFrame(step);
   }
-  function goNow() { S.follow = true; goTo(S.nowMs, true); S.follow = true; }
+  function goNow() { clearTimeout(homeTimer); S.follow = true; goTo(S.nowMs, true); S.follow = true; clearTimeout(homeTimer); }
 
   let playRaf = 0;
   function startPlay() {
@@ -626,11 +641,11 @@
 
   function bindScrub() {
     const hero = $('#hero');
-    let drag = null, vel = 0, inertia = 0;
+    let drag = null, vel = 0;
     const span = () => S.domain.d1 - S.domain.d0;
     // Dragging the sky: a full screen width is 18 hours.
     hero.addEventListener('pointerdown', (e) => {
-      if (e.button > 0 || !S.hours) return;
+      if (e.button > 0 || !S.hours || S.tab !== 'week') return;
       if (e.target.closest('button, a, input, .chips, #ask, #dress, .wins, #ribbonWrap, .sheet')) return;
       stopPlay(); cancelAnimationFrame(inertia);
       drag = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId, moved: false };
@@ -750,6 +765,29 @@
     } catch (e) { /* offline launch is optional */ }
   }
 
+  /* ---------- tabs: Today (locked to now) and Week (travel through time) ---------- */
+
+  function setTab(tab) {
+    if (S.tab === tab && document.body.dataset.tab === tab) return;
+    stopPlay(); stopMotion();
+    S.tab = tab;
+    document.body.dataset.tab = tab;
+    for (const b of document.querySelectorAll('.tab')) { const on = b.dataset.tab === tab; b.classList.toggle('on', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); }
+    if (S.hours && S.domain) {
+      if (tab === 'today') { clearTimeout(homeTimer); S.follow = true; S.T = clamp(S.nowMs, S.domain.d0, S.domain.d1 - HOUR); renderToday(); }
+      else { renderToday(); sizeRibbon(); }
+      requestUpdate();
+    }
+    window.scrollTo(0, 0);
+  }
+
+  function renderFresh() {
+    const b = $('#freshBtn');
+    if (!S.wx) { b.textContent = ''; return; }
+    b.textContent = S.loading ? 'Updating…' : (S.stale ? 'Offline · ' : 'Updated ') + C.ageLabel(S.wx.at, Date.now());
+  }
+  function refreshNow() { if (S.place && !S.loading) { load(S.place, { force: true }); renderFresh(); } }
+
   /* ---------- live: the page keeps itself current ---------- */
 
   function tick() {
@@ -759,8 +797,9 @@
     // Midnight passed (or the hour turned): rebuild the strip so "Now" and the dimmed past stay right.
     if (S.place && todayCols.length && Math.floor(S.nowMs / HOUR) !== Math.floor(S.todayBuiltAt / HOUR)) { S.todayBuiltAt = S.nowMs; renderToday(); }
     requestUpdate();
-    // New forecast every ten minutes while the page is open; the provider cache decides if a request is needed.
-    if (S.wx && S.nowMs - S.wx.at > 10 * 60000 && !S.loading && document.visibilityState === 'visible') load(S.place);
+    renderFresh();
+    // New forecast every five minutes while the page is open; the provider cache decides if a request is needed.
+    if (S.wx && S.nowMs - S.wx.at > 5 * 60000 && !S.loading && document.visibilityState === 'visible') load(S.place);
   }
 
   /* ---------- wiring ---------- */
@@ -778,6 +817,10 @@
     $('#firstrun').addEventListener('click', openSheet);
     $('#playBtn').addEventListener('click', () => (S.playing ? stopPlay() : startPlay()));
     $('#nowBtn').addEventListener('click', goNow);
+    $('#freshBtn').addEventListener('click', refreshNow);
+    clear($('#tabToday')).append(icon('sunny', 22), h('span', null, 'Today'));
+    clear($('#tabWeek')).append(icon('week', 22), h('span', null, 'Week'));
+    for (const b of document.querySelectorAll('.tab')) b.addEventListener('click', () => setTab(b.dataset.tab));
     $('#alertPill').addEventListener('click', () => { const c = $('#alertCard'); c.hidden = !c.hidden; if (!c.hidden) c.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
     clear($('#playBtn')).append(icon('play', 18), h('span', null, 'Play the week'));
     clear($('#nowBtn')).append(icon('now', 18), h('span', null, 'Now'));
@@ -786,7 +829,7 @@
     clear($('#locate')).append(icon('locate', 20), h('span', null, 'Use my location'));
     clear($('#goBtn')).append(icon('search', 18), h('span', { class: 'sr' }, 'Search'));
     window.addEventListener('online', () => { if (S.error) load(S.error.place); });
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { tick(); checkForUpdate(true); } });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { if (S.tab === 'today' && S.hours) { S.follow = true; clearTimeout(homeTimer); } tick(); checkForUpdate(true); } });
     setInterval(tick, 30000);
     setInterval(() => { if (document.visibilityState === 'visible') refreshFamily(); }, 5 * 60000);
     registerSW();
