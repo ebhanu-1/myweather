@@ -88,7 +88,7 @@
   const S = {
     place: null, places: store.get('places', []), wx: null, hours: null, minutely: [], current: null, aqAt: null,
     alerts: [], family: [], nowMs: Date.now(), T: Date.now(), follow: true, actId: store.get('act', null), scores: null, windows: [],
-    loading: false, error: null, stale: null, domain: null, elevs: null, playing: false, loadId: 0, dayInfo: null, hinted: store.get('hinted', false),
+    loading: false, error: null, stale: null, domain: null, elevs: null, playing: false, loadId: 0, dayInfo: null, todayScroll: 0, todayBuiltAt: 0, hinted: store.get('hinted', false),
   };
   const fmtDeg = (v) => (isNum(v) ? Math.round(v) + '°' : '–');
 
@@ -183,6 +183,7 @@
     renderBanner();
     renderAlerts();
     renderActivities();
+    renderToday();
     renderWeek();
     renderFamily();
     sizeRibbon();
@@ -247,6 +248,7 @@
     drawRibbon();
     renderDetails(r, c, info, story);
     renderSun(T, r);
+    syncToday();
 
     sky.set(K.stateFrom(r, c, info, { snowCover: snowCoverAt(T) }));
     const sl = $('#ribbon');
@@ -386,6 +388,65 @@
     const r = 15, ill = clamp(m.illum, 0, 1), rx = Math.max(0.01, r * Math.abs(1 - 2 * ill)), right = m.waxing, cres = ill < 0.5;
     const d = 'M0 ' + -r + ' A' + r + ' ' + r + ' 0 0 ' + (right ? 1 : 0) + ' 0 ' + r + ' A' + rx + ' ' + r + ' 0 0 ' + (cres === right ? 0 : 1) + ' 0 ' + -r + 'Z';
     return svg('svg', { viewBox: '-17 -17 34 34', width: size, height: size, 'aria-hidden': 'true' }, svg('circle', { r, fill: '#2a3550' }), path(d, { fill: '#f2efe2' }));
+  }
+
+  /* ---------- today, hour by hour ---------- */
+
+  // The strip is built once per forecast load; scrubbing only moves the highlight (syncToday), so dragging stays cheap.
+  let todayCols = [], todaySel = -1, todayKey = null;
+  function renderToday() {
+    const el = $('#today');
+    clear(el);
+    todayCols = []; todaySel = -1; S.todayBuiltAt = S.nowMs;
+    const t = C.todayHours(S.place, S.hours, S.nowMs);
+    if (!t.rows.length) { todayKey = null; return; }
+    const keep = todayKey === t.key && el.dataset.place === S.place.id ? S.todayScroll : null;
+    todayKey = t.key; el.dataset.place = S.place.id;
+    el.appendChild(h('h3', null, 'Today, hour by hour'));
+    if (t.summary) el.appendChild(h('p', { class: 'tsum' }, t.summary));
+    const strip = h('div', { class: 'hours', role: 'group', 'aria-label': 'Hours of today. Tap one to see the sky then' });
+    for (const row0 of t.rows) {
+      const row = calibrated(row0, row0.ms);
+      const info = C.codeInfo(row0.code);
+      const wet = row0.pop >= 20 || row0.precipIn >= 0.01;
+      const col = h('button', { type: 'button', class: 'hcol' + (row0.past ? ' past' : '') + (row0.now ? ' now' : '') + (row0.night ? ' night' : ''), 'data-ms': row0.ms, onclick: () => { goTo(row0.now ? S.nowMs : row0.ms, true); document.getElementById('hero').scrollIntoView({ behavior: 'smooth', block: 'start' }); },
+        'aria-label': (row0.now ? 'Now' : row0.label) + ', feels ' + (isNum(row.feelsF) ? Math.round(row.feelsF) + ' degrees' : 'unknown') + ', ' + info.label.toLowerCase() + (wet ? ', ' + Math.round(row0.pop) + '% chance of rain' : '') },
+        h('span', { class: 'ht' }, row0.now ? 'Now' : row0.label.replace(' ', ' ')),
+        h('span', { class: 'hi' }, wxIcon(info.kind, 26, row0.night)),
+        h('b', { class: 'hf' }, fmtDeg(row.feelsF)),
+        h('span', { class: 'hp' }, wet ? Math.round(row0.pop) + '%' : ''),
+        h('span', { class: 'hs' }, row0.sun === 'sunrise' ? 'Sunrise' : row0.sun === 'sunset' ? 'Sunset' : ''));
+      todayCols.push({ ms: row0.ms, el: col });
+      strip.appendChild(col);
+    }
+    el.appendChild(strip);
+    strip.addEventListener('scroll', () => { S.todayScroll = strip.scrollLeft; }, { passive: true });
+    // First view: line up with the current hour (the past is one swipe to the left). Later reloads keep where you were.
+    const nowCol = todayCols.find((c) => c.el.classList.contains('now')) || todayCols[0];
+    strip.scrollLeft = keep != null ? keep : Math.max(0, nowCol.el.offsetLeft - 8);
+    S.todayScroll = strip.scrollLeft;
+    syncToday(true);
+  }
+  // Highlight the hour being looked at; when it changes, bring it into view (only if the strip is showing today).
+  function syncToday(force) {
+    if (!todayCols.length) return;
+    const T = S.T;
+    let sel = -1;
+    const isNow = Math.abs(T - S.nowMs) < 20 * 60000;
+    for (let i = 0; i < todayCols.length; i++) {
+      const c = todayCols[i];
+      if (isNow ? c.el.classList.contains('now') : T >= c.ms - HOUR / 2 && T < c.ms + HOUR / 2) { sel = i; break; }
+    }
+    if (sel === todaySel && !force) return;
+    if (todaySel >= 0 && todayCols[todaySel]) todayCols[todaySel].el.classList.remove('sel');
+    todaySel = sel;
+    if (sel < 0) return;
+    const col = todayCols[sel].el, strip = col.parentNode;
+    col.classList.add('sel');
+    const left = strip.scrollLeft, w = strip.clientWidth;
+    if (col.offsetLeft < left + 4 || col.offsetLeft + col.offsetWidth > left + w - 4) {
+      strip.scrollTo({ left: Math.max(0, col.offsetLeft - (w - col.offsetWidth) / 2), behavior: S.playing ? 'auto' : 'smooth' });
+    }
   }
 
   /* ---------- the week ---------- */
@@ -695,6 +756,8 @@
     if (!S.hours) return;
     S.nowMs = Date.now();
     if (S.follow && !S.playing) S.T = clamp(S.nowMs, S.domain.d0, S.domain.d1 - HOUR);
+    // Midnight passed (or the hour turned): rebuild the strip so "Now" and the dimmed past stay right.
+    if (S.place && todayCols.length && Math.floor(S.nowMs / HOUR) !== Math.floor(S.todayBuiltAt / HOUR)) { S.todayBuiltAt = S.nowMs; renderToday(); }
     requestUpdate();
     // New forecast every ten minutes while the page is open; the provider cache decides if a request is needed.
     if (S.wx && S.nowMs - S.wx.at > 10 * 60000 && !S.loading && document.visibilityState === 'visible') load(S.place);

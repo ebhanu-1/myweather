@@ -555,6 +555,53 @@
     });
   }
 
+  // The local day containing nowMs, hour by hour: one row per hour with what the strip needs, plus a one-line summary.
+  // Rows: ms, label, tempF, feelsF, pop, precipIn, code, night, past (hour already over), now (hour containing nowMs),
+  // sun ('sunrise' | 'sunset' | null: the hour in which the sun crosses the horizon).
+  const WET_POP = 40;
+  const isWetHour = (h) => (h.pop || 0) >= WET_POP || (h.precipIn || 0) >= 0.01;
+  function todayHours(place, hours, nowMs) {
+    const tz = place.tz;
+    const key = localParts(nowMs, tz).date;
+    const d0 = zonedMidnight(key, tz), d1 = zonedMidnight(nextDayKey(key), tz);
+    const st = sunTimes(place.lat, place.lon, key, tz);
+    const hourOf = (ms) => (ms ? Math.floor((ms - d0) / HOUR) : -1);
+    const rise = hourOf(st.sunrise), set = hourOf(st.sunset);
+    const rows = hours.filter((h) => h.ms >= d0 && h.ms < d1).map((h) => ({
+      ms: h.ms, label: hourLabel(h.ms, tz), tempF: h.tempF, feelsF: h.feelsF, pop: h.pop || 0, precipIn: h.precipIn || 0, code: h.code,
+      night: sunPosition(place.lat, place.lon, h.ms + HOUR / 2).elevDeg < -0.83,
+      past: h.ms + HOUR <= nowMs, now: h.ms <= nowMs && nowMs < h.ms + HOUR,
+      sun: hourOf(h.ms) === rise ? 'sunrise' : hourOf(h.ms) === set ? 'sunset' : null,
+    }));
+    return { key, rows, summary: todaySummary(rows, tz) };
+  }
+  // "Warmest 58° at 2 PM, coldest 41° at 6 AM. Rain 3 PM to 7 PM." Only the rest of the day (and the current hour) is described.
+  function todaySummary(rows, tz) {
+    const left = rows.filter((r) => !r.past);
+    const use = left.length ? left : rows;
+    if (!use.length) return '';
+    const withF = use.filter((r) => isNum(r.feelsF));
+    let out = '';
+    if (withF.length > 3) {
+      const hi = withF.reduce((a, r) => (r.feelsF > a.feelsF ? r : a)), lo = withF.reduce((a, r) => (r.feelsF < a.feelsF ? r : a));
+      const f = (r) => Math.round(r.feelsF) + '° at ' + r.label;
+      if (hi.feelsF - lo.feelsF >= 4) out = (hi.ms < lo.ms ? 'Feels warmest ' + f(hi) + ', coldest ' + f(lo) : 'Feels coldest ' + f(lo) + ', warmest ' + f(hi)) + '. ';
+    }
+    const runs = [];
+    for (const r of use) {
+      const last = runs[runs.length - 1];
+      if (!isWetHour(r)) continue;
+      if (last && r.ms - last.end <= HOUR) last.end = r.ms + HOUR; else runs.push({ start: r.ms, end: r.ms + HOUR, kind: codeInfo(r.code).kind === 'snow' ? 'Snow' : 'Rain' });
+    }
+    if (!runs.length) out += left.length === rows.length ? 'Dry all day.' : 'Dry for the rest of today.';
+    else {
+      const first = runs[0], now = use[0];
+      const span = (x) => hourLabel(x.start, tz) + ' to ' + hourLabel(x.end, tz);
+      out += runs.length > 2 ? first.kind + ' on and off, starting ' + hourLabel(first.start, tz) + '.' : runs.map((x) => (first.start <= now.ms && x === first ? x.kind + ' until ' + hourLabel(x.end, tz) : x.kind + ' ' + span(x))).join(', then ') + '.';
+    }
+    return out.trim();
+  }
+
   function mergeAir(hours, air) {
     const m = new Map((air || []).map((a) => [a.ms, a]));
     return hours.map((h) => { const a = m.get(h.ms); return a ? Object.assign({}, h, { aqi: a.aqi, pm25: a.pm25 }) : h; });
@@ -581,6 +628,6 @@
     sampleAt, indexAt, contextAt, circMix,
     feelsWord, comfortWord, windChillDelta, heatIndexDelta, feelsDrivers, feelsStory, vibe, dress,
     ACTIVITIES, rate, scoreSeries, bestWindows,
-    outlook, vsYesterday, nowcast, sunsetQuality, groupDays, mergeAir, pressureTrend, dirName, aqiWord, uvWord,
+    outlook, vsYesterday, nowcast, sunsetQuality, groupDays, todayHours, mergeAir, pressureTrend, dirName, aqiWord, uvWord,
   };
 });

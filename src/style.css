@@ -96,7 +96,7 @@ body.scrubbing .hero { cursor: grabbing; }
 @media (prefers-reduced-motion: reduce) { .hint { animation: none; } }
 
 /* cards */
-.cards { display: grid; gap: 14px; padding-top: 16px; }
+.cards { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; padding-top: 16px; }
 .card { background: var(--glass); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; backdrop-filter: blur(18px) saturate(1.25); -webkit-backdrop-filter: blur(18px) saturate(1.25); }
 .card h3 { font-size: .78rem; letter-spacing: .07em; text-transform: uppercase; color: var(--ink2); margin-bottom: 10px; font-weight: 700; }
 .alerts .alert { padding: 10px 0; border-bottom: 1px solid var(--line); }
@@ -119,6 +119,19 @@ body.scrubbing .hero { cursor: grabbing; }
 .sunsetbar i { display: block; height: 100%; background: linear-gradient(90deg, #ffb066, #ff6f91, #b983ff); border-radius: 99px; }
 .moonrow { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
 .ext { font-size: .85rem; color: var(--ink2); }
+/* today, hour by hour */
+.tsum { color: var(--ink2); font-size: .92rem; margin: -2px 0 10px; }
+.hours { position: relative; display: flex; gap: 2px; overflow-x: auto; margin: 0 -8px; padding: 2px 8px 4px; scrollbar-width: none; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
+.hours::-webkit-scrollbar { display: none; }
+.hcol { flex: none; width: 56px; display: grid; justify-items: center; align-content: start; gap: 3px; padding: 8px 0 7px; border-radius: 14px; border: 1.5px solid transparent; text-align: center; }
+.hcol.past { opacity: .5; }
+.hcol.now .ht { color: #ffd678; }
+.hcol.sel { background: rgba(255,255,255,.16); border-color: rgba(255,255,255,.55); opacity: 1; }
+.hcol.night:not(.sel) { background: rgba(8,14,40,.28); }
+.ht { font-size: .74rem; font-weight: 700; color: var(--ink2); white-space: nowrap; }
+.hf { font-size: 1.05rem; font-weight: 600; }
+.hp { min-height: 1em; font-size: .76rem; font-weight: 700; color: var(--rain); }
+.hs { min-height: 1em; font-size: .64rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: #ffd678; }
 .dayrow { display: grid; grid-template-columns: 74px 30px 38px 40px 1fr 40px; align-items: center; gap: 4px; width: 100%; padding: 8px 0; border-top: 1px solid var(--line); text-align: left; }
 .dayrow:first-of-type { border-top: 0; }
 .dn { font-weight: 600; } .dp { color: var(--rain); font-size: .82rem; font-weight: 700; text-align: right; padding-right: 6px; } .dl { color: var(--ink2); text-align: right; } .dh { font-weight: 600; text-align: right; }

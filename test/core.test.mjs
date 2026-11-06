@@ -237,3 +237,47 @@ test('providers: place input parsing', () => {
   assert.ok(P.zipOk('01810') && !P.zipOk('1810'));
   assert.equal(P.stateAbbr('Texas'), 'TX');
 });
+
+test('today by the hour: one row per local hour, now and past marked, sun hours found, summary says when rain comes', () => {
+  const now = T0 + 13 * 3600000 + 20 * 60000; // 1:20 PM EST
+  const hours = series(72, (i) => ({ feelsF: 40 + Math.min(i, 48 - i) , tempF: 40 + Math.min(i, 48 - i), pop: i >= 15 && i <= 18 ? 70 : 0, code: i >= 15 && i <= 18 ? 61 : 0 }));
+  const t = C.todayHours(ANDOVER, hours, now);
+  assert.equal(t.key, '2026-11-05');
+  assert.equal(t.rows.length, 24);
+  assert.equal(t.rows[0].label, '12 AM');
+  assert.equal(t.rows.filter((r) => r.now).length, 1);
+  assert.equal(t.rows.findIndex((r) => r.now), 13);
+  assert.ok(t.rows.slice(0, 13).every((r) => r.past) && !t.rows[13].past);
+  assert.equal(t.rows.findIndex((r) => r.sun === 'sunrise'), 6);
+  assert.equal(t.rows.findIndex((r) => r.sun === 'sunset'), 16);
+  assert.ok(t.rows[2].night && !t.rows[12].night && t.rows[20].night);
+  assert.match(t.summary, /Rain 3 PM to 7 PM/);
+  assert.match(t.summary, /^Feels coldest 53° at 1 PM, warmest 63° at 11 PM\. Rain 3 PM to 7 PM\.$/);
+});
+
+test('today summary: dry day, rain already falling, and a day with no data gaps', () => {
+  const now = T0 + 9 * 3600000;
+  const dry = C.todayHours(ANDOVER, series(48, () => ({})), now);
+  assert.match(dry.summary, /Dry for the rest of today/);
+  assert.equal(C.todayHours(ANDOVER, series(48, () => ({})), T0 + 1000).summary.includes('Dry all day.'), true);
+  const wet = C.todayHours(ANDOVER, series(48, (i) => ({ pop: i >= 8 && i <= 11 ? 90 : 0, precipIn: i >= 8 && i <= 11 ? 0.1 : 0, code: 63 })), now);
+  assert.match(wet.summary, /Rain until 12 PM/);
+  const snow = C.todayHours(ANDOVER, series(48, (i) => ({ pop: i >= 14 && i <= 15 ? 80 : 0, code: i >= 14 && i <= 15 ? 73 : 0 })), now);
+  assert.match(snow.summary, /Snow 2 PM to 4 PM/);
+  const nulls = C.todayHours(ANDOVER, series(48, () => ({ feelsF: null, pop: null })), now);
+  assert.ok(nulls.rows.length === 24 && typeof nulls.summary === 'string');
+});
+
+test('today by the hour on a 23-hour spring-forward day has 23 rows', () => {
+  const springNow = Date.parse('2027-03-14T16:00:00Z');
+  const start = C.zonedMidnight('2027-03-13', ANDOVER.tz);
+  const hs = series(96, () => ({}), start);
+  assert.equal(C.todayHours(ANDOVER, hs, springNow).rows.length, 23);
+});
+
+test('today summary skips the high/low sentence when the rest of the day is flat or nearly over', () => {
+  const flat = C.todayHours(ANDOVER, series(48, () => ({ feelsF: 60 })), T0 + 9 * 3600000);
+  assert.equal(flat.summary, 'Dry for the rest of today.');
+  const late = C.todayHours(ANDOVER, series(48, (i) => ({ feelsF: 40 + i })), T0 + 21 * 3600000);
+  assert.equal(late.summary, 'Dry for the rest of today.');
+});

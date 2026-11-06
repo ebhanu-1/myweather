@@ -14,6 +14,12 @@ One number, `S.T`, is the moment you are looking at. Everything is a function of
 - **Play the week** streams 4 hours of weather per second. The page also refreshes itself: the clock, the rain countdown and the
   forecast stay current while it is open (forecast every 10 minutes, family every 5).
 
+## Today, hour by hour
+Above the week list sits a strip of today's 24 hours (icon, feels-like, rain chance, sunrise and sunset hours; night hours shaded, the past dimmed).
+It is the glanceable answer to "what is today doing" before the days that follow. It shares the one clock: the hour being looked at is
+highlighted and scrolled into view as you scrub, and tapping an hour moves the sky there. The sentence above it says when it is warmest
+and coldest and when rain comes, for the rest of the day only.
+
 ## Feels like, in plain words
 `feelsStory` names the word (bitter... dangerously hot), at most two tags (breezy, muggy, sunny...), and the drivers: NWS wind chill
 and Rothfusz heat index explain the gap between air and feel ("Wind takes 6° off", "Humidity adds 4°", "Sunshine adds 3°").

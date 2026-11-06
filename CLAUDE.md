@@ -6,6 +6,9 @@ Single-file web app for Bhanu and family: a weather page you scrub through inste
 Design notes and what makes it different: docs/design.md.
 
 ## Status (2026-11-05)
+- v1.1: added "Today, hour by hour" card above "The week" (24-hour strip: icon, feels-like, rain %, sunrise/sunset, past dimmed; follows the scrubbed
+  moment, tap an hour to jump the sky there; one-line summary of the rest of today). Logic is `todayHours` in core.js. Also fixed the card grid so a
+  wide child can't stretch the page. Checked in a browser at 375 px (evening and midday); not yet on a real phone.
 - v1.0 released and live: https://ebhanu-1.github.io/myweather/ (main @ 81a6f6b at release; this file updated after).
 - Built and verified in a browser at phone width: sky scene, scrub (sky drag + ribbon), feels-like story, dress, ask-the-sky with
   best windows, rain countdown, week list, sun/moon/sunset card, family orbs, place sheet (zip, city, "lat, lon", location), NWS alerts.
@@ -32,7 +35,7 @@ Design notes and what makes it different: docs/design.md.
 ## Layout (borrowed from ClearSky where noted)
 - src/core.js       pure: time zones + sun position + sunrise/sunset (ClearSky), moon, WMO codes, hourly sampling, the feel story
                     (wind chill / heat index drivers, headline, vibe sentence), dress, 8 activities with scores and best windows,
-                    outlook, vs-yesterday, 15-minute rain countdown, sunset color, day grouping
+                    outlook, vs-yesterday, 15-minute rain countdown, sunset color, day grouping, today hour-by-hour rows + summary (`todayHours`)
 - src/providers.js  network (ClearSky's http/cache/ProviderError/zip lookup, new weather calls): one Open-Meteo forecast call
                     (hourly + minutely_15 + current, yesterday + 8 days), air quality, NWS alerts, place search, multi-place "now"
 - src/sky.js        the canvas scene: palette by sun height, stars, moon phase, 3 cloud layers drifting with the real wind,
