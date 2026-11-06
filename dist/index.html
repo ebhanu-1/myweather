@@ -224,7 +224,7 @@ body.sheet-open { overflow: hidden; }
     <button type="button" id="placeBtn" class="placebtn" aria-label="Choose a place"><span id="placeIcon"></span><span id="placeName">MyWeather</span><span id="placeChev"></span></button>
     <div class="right">
       <button type="button" id="alertPill" class="alertpill" hidden></button>
-      <span class="ver" id="ver" title="version 1.2 · built 2026-11-06 08:37 UTC">v1.2</span>
+      <span class="ver" id="ver" title="version 1.3 · built 2026-11-06 08:40 UTC">v1.3</span>
     </div>
   </header>
   <div id="updatebar" aria-live="polite"></div>
@@ -2472,7 +2472,7 @@ body.sheet-open { overflow: hidden; }
   /* ---------- versioning, self-update, offline launch ----------
      Same protocol as ClearSky and Studio Phone: the service worker serves the cached page first; the live-version probe (?u=)
      and the update load (?v=) always go to the network. Every build bumps VERSION (build.mjs). */
-  const APP_VERSION = 'v1.2';
+  const APP_VERSION = 'v1.3';
   async function checkForUpdate(auto, manual) {
     const bar = $('#updatebar');
     const say = (t) => { if (!bar) return; clear(bar); if (t) bar.appendChild(h('div', { class: 'banner info', role: 'status' }, t)); };

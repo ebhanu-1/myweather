@@ -32,7 +32,7 @@ Design notes and what makes it different: docs/design.md.
 - VERSION file holds e.g. `1.0`; every `npm run build` bumps the last part. `node build.mjs --version 2.0` pins a bigger one.
 - Shown top right of the app (tap it to check for an update). The app probes the live page (`?u=`) at launch and each time it returns
   to the foreground; with nothing on screen it reloads to the new version (`?v=`), otherwise it shows "Update now".
-- public/sw.js: cache-first page for offline launch; `?u=` always goes to the network, `?v=` fetches fresh and replaces the cache.
+- public/sw.js: cache-first page for offline launch (the background refresh revalidates past the 10-minute HTTP cache, v1.3); `?u=` always goes to the network, `?v=` fetches fresh and replaces the cache.
 - Release: `npm run build`, commit, `git push`. GitHub Pages serves main at https://ebhanu-1.github.io/myweather/ (repo ebhanu-1/myweather).
 - US units only (°F, mph, in, mi). Open-Meteo is asked for US units directly; there is no conversion layer.
 

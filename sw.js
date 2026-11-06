@@ -22,7 +22,9 @@ self.addEventListener('fetch', (e) => {
       catch (err) { const hit = await c.match(pageKey); if (hit) return hit; throw err; }
     }
     const hit = await c.match(pageKey);
-    const net = fetch(e.request).then((r) => { if (r && r.ok) c.put(pageKey, r.clone()); return r; }).catch(() => null);
+    // 'no-cache' revalidates with the server instead of trusting the browser's HTTP cache (GitHub Pages sends max-age=600),
+    // so a new release reaches the saved copy on the next open instead of up to ten minutes later.
+    const net = fetch(e.request, { cache: 'no-cache' }).then((r) => { if (r && r.ok) c.put(pageKey, r.clone()); return r; }).catch(() => null);
     if (hit) { e.waitUntil(net); return hit; }
     const r = await net; if (r) return r;
     return new Response('MyWeather is offline and not cached yet. Open it once while online.', { status: 503, headers: { 'Content-Type': 'text/plain' } });
