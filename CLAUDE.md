@@ -5,7 +5,12 @@ Single-file web app for Bhanu and family: a weather page you scrub through inste
 7 days. HTML first (same journey as Media Studio and ClearSky), native iOS later when needed.
 Design notes and what makes it different: docs/design.md.
 
-## Status (2026-11-06)
+## Status (2026-11-07)
+- v1.4: the forecast now comes from the National Weather Service for US places (api.weather.gov grid: /points then /gridpoints, expanded to hours, laid over
+  Open-Meteo in `overlayNws`; weather type mapped to a WMO code by `nwsCode`). Open-Meteo still supplies what NWS does not publish (UV, sun radiation, cloud layers,
+  pressure, the 15-minute rain countdown, yesterday and past hours, air quality, place search) and is the whole forecast outside the US or if NWS fails. UV and
+  sun radiation are Open-Meteo's, scaled to the NWS sky cover. "Updated N min ago · NWS" shows which source is live. Checked in a browser at 375 px (Today and Week),
+  live check green; not yet on a real phone, and the accuracy of NWS vs Open-Meteo is not yet judged.
 - v1.2: two tabs (bottom bar). TODAY (opens first) is locked to now: no sky drag, no ribbon; the hour strip sits in the hero and tapping an hour
   moves the sky there, drifting back to now after 3 idle minutes (or on "Now", or when the app returns to the foreground); good-window chips show today only.
   WEEK is where you travel: sky drag, ribbon, play the week, the day list, windows for the whole week. Details and sun cards show on both; family on Today.
@@ -40,7 +45,7 @@ Design notes and what makes it different: docs/design.md.
 - src/core.js       pure: time zones + sun position + sunrise/sunset (ClearSky), moon, WMO codes, hourly sampling, the feel story
                     (wind chill / heat index drivers, headline, vibe sentence), dress, 8 activities with scores and best windows,
                     outlook, vs-yesterday, 15-minute rain countdown, sunset color, day grouping, today hour-by-hour rows + summary (`todayHours`)
-- src/providers.js  network (ClearSky's http/cache/ProviderError/zip lookup, new weather calls): one Open-Meteo forecast call
+- src/providers.js  network (ClearSky's http/cache/ProviderError/zip lookup, new weather calls): NWS grid forecast (US) over one Open-Meteo forecast call
                     (hourly + minutely_15 + current, yesterday + 8 days), air quality, NWS alerts, place search, multi-place "now"
 - src/sky.js        the canvas scene: palette by sun height, stars, moon phase, 3 cloud layers drifting with the real wind,
                     rain/snow/thunder/fog/haze, swaying trees, frost (cold) and shimmer (hot). Pure `skyPalette` and `stateFrom` are tested

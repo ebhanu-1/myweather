@@ -290,3 +290,86 @@ test('age label: just now, minutes, then hours', () => {
   assert.equal(C.ageLabel(n - 150 * 60000, n), '3 h ago');
   assert.equal(C.ageLabel(n + 5000, n), 'just now');
 });
+
+/* ---------- National Weather Service layer ---------- */
+
+const nwsGrid = (extra) => ({
+  properties: Object.assign({
+    temperature: { values: [{ validTime: '2026-11-07T01:00:00+00:00/PT1H', value: 10 }, { validTime: '2026-11-07T02:00:00+00:00/PT2H', value: 0 }] },
+    apparentTemperature: { values: [{ validTime: '2026-11-07T01:00:00+00:00/PT1H', value: 8 }] },
+    windChill: { values: [{ validTime: '2026-11-07T02:00:00+00:00/PT2H', value: -5 }] },
+    probabilityOfPrecipitation: { values: [{ validTime: '2026-11-07T01:00:00+00:00/PT3H', value: 60 }] },
+    quantitativePrecipitation: { values: [{ validTime: '2026-11-07T01:00:00+00:00/PT2H', value: 5.08 }] },
+    windSpeed: { values: [{ validTime: '2026-11-07T01:00:00+00:00/PT1H', value: 16.09344 }] },
+    skyCover: { values: [{ validTime: '2026-11-07T01:00:00+00:00/PT3H', value: 90 }] },
+    visibility: { values: [{ validTime: '2026-11-07T01:00:00+00:00/PT3H', value: 40000 }] },
+    weather: { values: [{ validTime: '2026-11-07T01:00:00+00:00/PT1H', value: [{ coverage: 'likely', weather: 'rain', intensity: 'moderate', attributes: [] }] }] },
+  }, extra || {}),
+});
+
+test('providers: NWS durations and grid series expand to one US-unit record per hour', () => {
+  assert.equal(P.isoDurMs('PT3H'), 3 * 3600000);
+  assert.equal(P.isoDurMs('P1DT6H'), 30 * 3600000);
+  assert.equal(P.isoDurMs('P8D'), 8 * 24 * 3600000);
+  assert.equal(P.isoDurMs('garbage'), 0);
+  const m = P.normalizeNws(nwsGrid());
+  const t0 = Date.parse('2026-11-07T01:00:00Z');
+  assert.equal(m.size, 3);
+  assert.equal(m.get(t0).tempF, 50);
+  assert.equal(m.get(t0 + 3600000).tempF, 32);
+  assert.equal(m.get(t0 + 2 * 3600000).tempF, 32);                    // a 2 h value covers both hours
+  assert.equal(m.get(t0).feelsF, 46.4);                               // 8 C
+  assert.equal(m.get(t0 + 3600000).feelsF, -5 * 1.8 + 32);            // no apparent value: wind chill
+  assert.equal(m.get(t0 + 2 * 3600000).feelsF, -5 * 1.8 + 32);        // the wind chill covers both hours
+  assert.equal(P.normalizeNws(nwsGrid({ windChill: { values: [] } })).get(t0 + 3600000).feelsF, 32); // nothing at all: the air temperature
+  assert.ok(Math.abs(m.get(t0).precipIn - 0.1) < 1e-9);               // 5.08 mm = 0.2 in over 2 h, so 0.1 in each hour
+  assert.ok(Math.abs(m.get(t0 + 3600000).precipIn - 0.1) < 1e-9);
+  assert.equal(m.get(t0 + 2 * 3600000).precipIn, null);               // beyond the rain amounts NWS published
+  assert.ok(Math.abs(m.get(t0).windMph - 10) < 1e-6);                 // 16.09344 km/h
+  assert.equal(m.get(t0).pop, 60);
+  assert.equal(m.get(t0).cloud, 90);
+  assert.equal(m.get(t0).visMi, 24);                                  // capped like Open-Meteo
+  assert.equal(m.get(t0).code, 63);                                   // likely moderate rain
+  assert.equal(m.get(t0 + 3600000).code, 3);                          // no weather entry: overcast from 90% sky
+  assert.throws(() => P.normalizeNws({}), (e) => e.kind === 'shape');
+});
+
+test('providers: NWS weather entries become WMO codes only when precipitation is likely', () => {
+  const rain = (coverage, intensity, weather) => [{ coverage, weather: weather || 'rain', intensity, attributes: [] }];
+  assert.equal(P.nwsCode(rain('likely', 'light'), 80, 30), 61);
+  assert.equal(P.nwsCode(rain('likely', 'heavy'), 80, 30), 65);
+  assert.equal(P.nwsCode(rain('chance', 'light'), 30, 30), 1);        // a chance of rain at 30% is still just a cloudy-ish sky
+  assert.equal(P.nwsCode(rain('chance', 'light'), 30, 50), 61);       // but at 50% it is rain
+  assert.equal(P.nwsCode(rain('slight_chance', 'light'), 20, 90), 1); // slight chance never counts: sky cover decides
+  assert.equal(P.nwsCode(rain('likely', 'moderate', 'rain_showers'), 50, 60), 81);
+  assert.equal(P.nwsCode(rain('likely', 'light', 'snow'), 90, 70), 71);
+  assert.equal(P.nwsCode(rain('likely', 'moderate', 'thunderstorms'), 90, 70), 95);
+  assert.equal(P.nwsCode([{ coverage: 'likely', weather: 'thunderstorms', intensity: null, attributes: ['large_hail'] }], 90, 70), 96);
+  assert.equal(P.nwsCode(rain('areas', null, 'fog'), 20, 0), 45);
+  assert.equal(P.nwsCode([{ coverage: null, weather: null, intensity: null }], 5, 0), 0);
+  assert.equal(P.nwsCode(null, 25, 0), 1);
+  assert.equal(P.nwsCode(null, 60, 0), 2);
+  assert.equal(P.nwsCode(null, 85, 0), 3);
+  assert.equal(P.nwsCode(null, null, null), null);
+});
+
+test('providers: NWS values replace Open-Meteo for the same hour; the rest stays and cloud-driven extras follow the NWS sky', () => {
+  const t0 = Date.parse('2026-11-07T01:00:00Z');
+  const om = (ms, o) => Object.assign({ ms, tempF: 70, feelsF: 70, rh: 50, dewF: 50, pop: 5, precipIn: 0, snowIn: 0, code: 0, cloud: 20, cloudLow: 10, cloudMid: 10, cloudHigh: 0, visMi: 10, windMph: 3, gustMph: 6, windDir: 90, uv: 6, rad: 800, pressHpa: 1010, aqi: null, pm25: null }, o || {});
+  const hours = [om(t0 - 3600000), om(t0), om(t0 + 3 * 3600000)];
+  const nws = P.normalizeNws(nwsGrid());
+  const r = P.overlayNws(hours, nws);
+  assert.equal(r.applied, 1);
+  assert.equal(r.hours[0], hours[0]);                                 // before NWS starts: untouched
+  assert.equal(r.hours[2], hours[2]);                                 // after it ends: untouched
+  const h = r.hours[1];
+  assert.equal(h.tempF, 50);
+  assert.equal(h.pop, 60);
+  assert.equal(h.code, 63);
+  assert.equal(h.cloud, 90);
+  assert.equal(h.pressHpa, 1010);                                     // NWS publishes none: Open-Meteo stays
+  assert.equal(h.cloudLow, 45);                                       // layers scaled 20% -> 90%
+  assert.ok(h.rad < 800 * 0.5 && h.uv < 6 * 0.5);                     // clear-ish -> overcast cuts sun strength
+  assert.equal(hours[1].tempF, 70);                                   // input not mutated
+  assert.equal(P.overlayNws(hours, null).applied, 0);
+});

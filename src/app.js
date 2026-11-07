@@ -784,7 +784,7 @@
   function renderFresh() {
     const b = $('#freshBtn');
     if (!S.wx) { b.textContent = ''; return; }
-    b.textContent = S.loading ? 'Updating…' : (S.stale ? 'Offline · ' : 'Updated ') + C.ageLabel(S.wx.at, Date.now());
+    b.textContent = S.loading ? 'Updating…' : (S.stale ? 'Offline · ' : 'Updated ') + C.ageLabel(S.wx.at, Date.now()) + (S.wx.source === 'nws' ? ' · NWS' : '');
   }
   function refreshNow() { if (S.place && !S.loading) { load(S.place, { force: true }); renderFresh(); } }
 

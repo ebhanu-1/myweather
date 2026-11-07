@@ -220,12 +220,158 @@
 
   const ckey = (p) => p.lat.toFixed(3) + ',' + p.lon.toFixed(3);
 
-  // One call: yesterday plus eight days of hours, the next 6 hours at 15 minutes, and the current reading.
+  /* ---------- National Weather Service forecast (US) ----------
+   * api.weather.gov: /points/{lat},{lon} gives the forecast grid cell, /gridpoints/{office}/{x},{y} gives the raw hourly-ish series
+   * (each value valid for an ISO interval like "2026-11-07T03:00:00+00:00/PT3H"). We expand those to one record per hour, convert to US units,
+   * and lay them over the Open-Meteo hours. Open-Meteo stays for what NWS does not publish: UV, sun radiation, cloud layers, pressure, the
+   * 15-minute rain countdown, yesterday's hours and air quality. Outside the US (no grid cell) or on any NWS failure the app runs on Open-Meteo alone. */
+
+  const NWS = 'https://api.weather.gov';
+  const HOUR_MS = 3600000;
+  const NWS_FIELDS = ['tempF', 'feelsF', 'rh', 'dewF', 'pop', 'precipIn', 'snowIn', 'visMi', 'windMph', 'gustMph', 'windDir', 'cloud', 'code'];
+
+  // "PT3H", "P1DT6H", "P8D" -> ms (weeks/months/years do not occur in grid data).
+  function isoDurMs(d) {
+    const m = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?)?$/.exec(String(d || ''));
+    if (!m) return 0;
+    return ((+m[1] || 0) * 24 + (+m[2] || 0)) * HOUR_MS + (+m[3] || 0) * 60000;
+  }
+
+  // Expand one grid series to Map(hour ms -> value). rate=true splits a period total evenly over its hours.
+  function expandSeries(series, conv, rate) {
+    const out = new Map();
+    const vals = series && Array.isArray(series.values) ? series.values : [];
+    for (const v of vals) {
+      if (!v || typeof v.validTime !== 'string' || v.value == null) continue;
+      const [t0, dur] = v.validTime.split('/');
+      const start = Date.parse(t0), len = isoDurMs(dur);
+      if (!Number.isFinite(start) || len <= 0) continue;
+      const first = Math.floor(start / HOUR_MS) * HOUR_MS;
+      const n = Math.min(Math.ceil((start + len - first) / HOUR_MS), 24 * 10);
+      const val = conv ? conv(v.value) : v.value;
+      if (val == null || (typeof val === 'number' && !Number.isFinite(val))) continue;
+      for (let i = 0; i < n; i++) out.set(first + i * HOUR_MS, rate && typeof val === 'number' ? val / n : val);
+    }
+    return out;
+  }
+
+  const cToF = (c) => (c == null ? null : c * 1.8 + 32);
+  const kmhToMph = (k) => (k == null ? null : k / 1.609344);
+  const mmToIn = (mm) => (mm == null ? null : mm / 25.4);
+
+  // NWS weather entries -> a WMO weather code (what Open-Meteo gives and core.codeInfo reads).
+  // Precipitation counts only when it is likely (rain chance >= 40 or a strong coverage word); otherwise the sky cover decides.
+  const NWS_STRONG = { likely: 1, definite: 1, numerous: 1, widespread: 1, occasional: 1, frequent: 1, categorical: 1, periodic: 1, intermittent: 1 };
+  const NWS_WEAK = { slight_chance: 1, isolated: 1, patchy: 1 };
+  function nwsCode(entries, sky, pop) {
+    const list = (entries || []).filter((e) => e && e.weather);
+    const intensity = (e, light, mid, heavy) => (e.intensity === 'heavy' ? heavy : e.intensity === 'light' || e.intensity === 'very_light' ? light : mid);
+    const strongEnough = (e) => !NWS_WEAK[e.coverage] && (NWS_STRONG[e.coverage] || (isNum(pop) && pop >= 40));
+    let best = null, bestRank = -1;
+    for (const e of list) {
+      const w = e.weather, hail = (e.attributes || []).some((a) => /hail/.test(a));
+      let code = null, rank = 0;
+      if (w === 'thunderstorms') { if (strongEnough(e) || e.coverage === 'chance') { code = hail ? 96 : 95; rank = 9; } }
+      else if (w === 'freezing_rain' || w === 'sleet') { if (strongEnough(e)) { code = intensity(e, 66, 67, 67); rank = 7; } }
+      else if (w === 'freezing_drizzle') { if (strongEnough(e)) { code = 56; rank = 6; } }
+      else if (w === 'snow' || w === 'blowing_snow') { if (strongEnough(e)) { code = intensity(e, 71, 73, 75); rank = 8; } }
+      else if (w === 'snow_showers') { if (strongEnough(e)) { code = 85; rank = 8; } }
+      else if (w === 'rain_showers') { if (strongEnough(e)) { code = intensity(e, 80, 81, 82); rank = 5; } }
+      else if (w === 'rain') { if (strongEnough(e)) { code = intensity(e, 61, 63, 65); rank = 5; } }
+      else if (w === 'drizzle') { if (strongEnough(e)) { code = intensity(e, 51, 53, 55); rank = 4; } }
+      else if (w === 'freezing_fog') { if (!NWS_WEAK[e.coverage] && e.coverage !== 'chance') { code = 48; rank = 3; } }
+      else if (w === 'fog') { if (!NWS_WEAK[e.coverage] && e.coverage !== 'chance') { code = 45; rank = 3; } }
+      if (code != null && rank > bestRank) { best = code; bestRank = rank; }
+    }
+    if (best != null) return best;
+    if (!isNum(sky)) return null;
+    return sky < 15 ? 0 : sky < 40 ? 1 : sky < 80 ? 2 : 3;
+  }
+
+  // The raw gridpoints response -> Map(hour ms -> partial record in US units, fields as in NWS_FIELDS).
+  function normalizeNws(j) {
+    const p = j && j.properties;
+    if (!p || !p.temperature || !Array.isArray(p.temperature.values) || !p.temperature.values.length) throw new ProviderError('shape', 'NWS grid response has no temperature');
+    const temp = expandSeries(p.temperature, cToF), app = expandSeries(p.apparentTemperature, cToF), chill = expandSeries(p.windChill, cToF), heat = expandSeries(p.heatIndex, cToF);
+    const dew = expandSeries(p.dewpoint, cToF), rh = expandSeries(p.relativeHumidity), pop = expandSeries(p.probabilityOfPrecipitation);
+    const qpf = expandSeries(p.quantitativePrecipitation, mmToIn, true), snow = expandSeries(p.snowfallAmount, mmToIn, true);
+    const wind = expandSeries(p.windSpeed, kmhToMph), gust = expandSeries(p.windGust, kmhToMph), dir = expandSeries(p.windDirection);
+    const sky = expandSeries(p.skyCover), vis = expandSeries(p.visibility, (m) => Math.min(24, m / 1609.344)), wx = expandSeries(p.weather);
+    const out = new Map();
+    for (const [ms, tempF] of temp) {
+      const g = (m) => (m.has(ms) ? m.get(ms) : null);
+      const r = { ms, tempF, feelsF: g(app), rh: g(rh), dewF: g(dew), pop: g(pop), precipIn: g(qpf), snowIn: g(snow), visMi: g(vis), windMph: g(wind), gustMph: g(gust), windDir: g(dir), cloud: g(sky), code: null };
+      if (r.feelsF == null) r.feelsF = g(chill) != null ? g(chill) : g(heat) != null ? g(heat) : tempF;
+      r.code = nwsCode(g(wx), r.cloud, r.pop);
+      out.set(ms, r);
+    }
+    return out;
+  }
+
+  // Lay NWS values over Open-Meteo hours (matched by hour). Where NWS has no value for a field/hour the Open-Meteo value stays.
+  // Cloud-dependent Open-Meteo extras (layers, sun radiation, UV) are scaled so they agree with the NWS sky cover.
+  const sunThrough = (c) => 1 - 0.75 * Math.pow(c / 100, 3.4); // clear-sky fraction that reaches the ground under c% cloud
+  function overlayNws(hours, nwsMap) {
+    let applied = 0;
+    const out = hours.map((h) => {
+      const n = nwsMap && nwsMap.get(h.ms);
+      if (!n) return h;
+      const o = Object.assign({}, h);
+      for (const f of NWS_FIELDS) if (isNum(n[f])) o[f] = n[f];
+      if (isNum(o.gustMph) && isNum(o.windMph) && o.gustMph < o.windMph) o.gustMph = o.windMph;
+      if (isNum(n.cloud) && isNum(h.cloud)) {
+        if (h.cloud >= 5) {
+          const k = n.cloud / h.cloud;
+          for (const f of ['cloudLow', 'cloudMid', 'cloudHigh']) if (isNum(h[f])) o[f] = Math.min(100, h[f] * k);
+        } else for (const f of ['cloudLow', 'cloudMid', 'cloudHigh']) o[f] = null;
+        const k2 = Math.min(1.5, sunThrough(n.cloud) / sunThrough(h.cloud));
+        if (isNum(h.rad)) o.rad = h.rad * k2;
+        if (isNum(h.uv)) o.uv = h.uv * k2;
+      }
+      applied++;
+      return o;
+    });
+    return { hours: out, applied };
+  }
+
+  const nwsKey = (p) => p.lat.toFixed(4) + ',' + p.lon.toFixed(4);
+
+  // Hourly NWS series for a place: { map, at } or null when NWS has no grid cell for it (outside the US). Throws on network trouble.
+  async function fetchNwsHours(place, opts) {
+    const pkey = 'nwsp:' + nwsKey(place), monthMs = 30 * 24 * 3600000;
+    const known = cache.get(pkey, monthMs);
+    if (known && known.v && known.v.none) return null;
+    let cell = known && known.v;
+    if (!cell) {
+      try {
+        const j = await http(NWS + '/points/' + nwsKey(place), { retries: 1, timeoutMs: 10000 });
+        const pr = j && j.properties;
+        if (!pr || !pr.gridId) throw new ProviderError('shape', 'NWS point response has no grid');
+        cell = { id: pr.gridId, x: pr.gridX, y: pr.gridY };
+      } catch (e) {
+        if (e && e.status === 404) { cache.set(pkey, { none: true }); return null; }
+        throw e;
+      }
+      cache.set(pkey, cell);
+    }
+    const res = await cachedJson('nwsg:' + nwsKey(place), opts && opts.force ? 0 : 5 * 60000, NWS + '/gridpoints/' + cell.id + '/' + cell.x + ',' + cell.y, { retries: 1, timeoutMs: 12000 });
+    return { map: normalizeNws(res.json), at: res.at, office: cell.id };
+  }
+
+  // Open-Meteo gives yesterday plus eight days of hours, the next 6 hours at 15 minutes, and the current reading; the National Weather Service
+  // grid forecast (US) is laid over it. `source` says which one the numbers came from ('nws' or 'open-meteo').
   async function fetchWeather(place, opts) {
     const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + place.lat + '&longitude=' + place.lon + '&hourly=' + HOURLY.join(',') +
       '&minutely_15=precipitation&current=temperature_2m,apparent_temperature,weather_code,is_day,precipitation&past_days=1&forecast_days=8&past_minutely_15=4&forecast_minutely_15=24' + UNITS;
-    const res = await cachedJson('wx:' + ckey(place), opts && opts.force ? 0 : 5 * 60000, url);
-    return Object.assign(normalizeWeather(res.json), { at: res.at, fromCache: res.fromCache, stale: !!res.stale, error: res.error || null });
+    const [res, nws] = await Promise.all([
+      cachedJson('wx:' + ckey(place), opts && opts.force ? 0 : 5 * 60000, url),
+      fetchNwsHours(place, opts).catch(() => null),
+    ]);
+    const w = normalizeWeather(res.json);
+    const o = nws ? overlayNws(w.hours, nws.map) : { hours: w.hours, applied: 0 };
+    const source = o.applied > 0 ? 'nws' : 'open-meteo';
+    // Open-Meteo's "current" reading would pull NWS hours back toward Open-Meteo, so it is dropped when NWS is in use.
+    return Object.assign(w, { hours: o.hours, current: source === 'nws' ? null : w.current, source, nwsAt: nws ? nws.at : null, at: res.at, fromCache: res.fromCache, stale: !!res.stale, error: res.error || null });
   }
 
   async function fetchAir(place) {
@@ -256,14 +402,29 @@
     const key = 'many:' + places.map(ckey).join('|');
     const res = await cachedJson(key, 5 * 60000, url);
     const arr = Array.isArray(res.json) ? res.json : [res.json];
-    return arr.map((j) => {
+    const rows = arr.map((j) => {
       const c = (j && j.current) || {};
       return { tempF: c.temperature_2m, feelsF: c.apparent_temperature, code: c.weather_code, isDay: c.is_day === 1, cloud: c.cloud_cover, precipIn: c.precipitation, ms: c.time ? Date.parse(c.time + ':00Z') - (j.utc_offset_seconds || 0) * 1000 : null };
     });
+    // National Weather Service numbers for each place's current hour, where it has them (US places); Open-Meteo stays otherwise.
+    const hourNow = Math.floor(Date.now() / HOUR_MS) * HOUR_MS;
+    await Promise.all(places.map(async (p, i) => {
+      try {
+        const n = await fetchNwsHours(p);
+        const rec = n && (n.map.get(hourNow) || n.map.get(hourNow + HOUR_MS));
+        if (rec && rows[i]) {
+          if (isNum(rec.tempF)) rows[i].tempF = rec.tempF;
+          if (isNum(rec.feelsF)) rows[i].feelsF = rec.feelsF;
+          if (isNum(rec.code)) rows[i].code = rec.code;
+          if (isNum(rec.cloud)) rows[i].cloud = rec.cloud;
+        }
+      } catch (e) { /* keep Open-Meteo for this place */ }
+    }));
+    return rows;
   }
 
   return {
     ProviderError, cache, http, cachedJson, zipOk, parseLatLon, geocodeZip, reverseName, resolveTimezone, searchPlaces, resolvePlaces,
-    normalizeWeather, normalizeAir, normalizeAlerts, fetchWeather, fetchAir, fetchAlerts, fetchNowMany, HOURLY, stateAbbr,
+    normalizeWeather, normalizeAir, normalizeAlerts, normalizeNws, nwsCode, overlayNws, isoDurMs, fetchNwsHours, fetchWeather, fetchAir, fetchAlerts, fetchNowMany, HOURLY, stateAbbr,
   };
 });
